@@ -1,7 +1,12 @@
-# A510Player stage 1
+# A510Player Stage 2 V2
 
-This first build deliberately tests the A510 RTSP endpoint independently of the 70mai app before adding an H.264 renderer.
+Marker: `=== A510 PLAYER STAGE 2 V2 ===`
 
-Target: `rtsp://192.168.0.1:554/livestream/12`
+Tests RTSP OPTIONS, DESCRIBE, SETUP and PLAY using RTP-over-TCP interleaving.
+It then counts RTP/H.264 packets for about 15 seconds.
 
-After installation, run `/var/jb/usr/bin/a510probe` and inspect `/var/mobile/A510Player.log`.
+Run:
+`/var/jb/usr/bin/a510probe`
+
+Log:
+`/var/mobile/A510Player.log`
