@@ -1,3 +1,12 @@
-# A510Player Stage 3
-Direct RTSP/RTP-over-TCP H.264 player for the 70mai A510 test network.
-Connect the iPhone to the A510 Wi-Fi, close the 70mai app, then launch A510Player.
+# A510Player CarPlay Stage 4 (experimental)
+
+Baseline Stage 3 RTSP/H.264 player is preserved.
+
+This build adds:
+- CarPlay framework linkage
+- a CarPlay template scene declaration
+- `CarPlaySceneDelegate`
+- an experimental attempt to attach `PlayerViewController` to the CarPlay-provided `CPWindow`
+
+Test on the jailbroken phone with wired CarPlay. The first goal is to determine whether
+A510Player becomes launchable on CarPlay and whether the CarPlay window accepts the UIKit renderer.
