@@ -1,8 +1,8 @@
 Package: com.sushibta.a510player
 Name: A510Player
-Version: 0.4.0
+Version: 0.3.2
 Architecture: iphoneos-arm64
-Description: Experimental direct A510 RTSP/H264 player with wired CarPlay scene.
+Description: Direct low-latency RTSP/H264 player test for 70mai A510.
 Maintainer: sushibta25-design
 Author: sushibta25-design
 Section: Applications

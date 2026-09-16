@@ -14,6 +14,14 @@
 @property(nonatomic,strong) NSData *sps;
 @property(nonatomic,strong) NSData *pps;
 @property(nonatomic) CMVideoFormatDescriptionRef format;
+@property(nonatomic) NSUInteger diagRTPPackets;
+@property(nonatomic) NSUInteger diagH264NALs;
+@property(nonatomic) NSUInteger diagReconnects;
+@property(nonatomic) NSTimeInterval diagLastPacket;
+@property(nonatomic,strong) NSTimer *diagTimer;
+@property(nonatomic,copy) NSString *diagRTSPState;
+@property(nonatomic,copy) NSString *diagRendererState;
+
 @end
 
 @implementation PlayerViewController
@@ -29,7 +37,14 @@
     self.statusLabel.backgroundColor=[UIColor colorWithWhite:0 alpha:.55];
     self.statusLabel.numberOfLines=0;
     self.statusLabel.textAlignment=NSTextAlignmentCenter;
-    self.statusLabel.text=@"A510Player Stage 3\nConnecting…";
+    self.statusLabel.text=@"A510Player Stage 3.2 DIAG\nStarting…";
+    self.statusLabel.font=[UIFont monospacedSystemFontOfSize:12 weight:UIFontWeightRegular];
+    self.statusLabel.textAlignment=NSTextAlignmentLeft;
+    self.statusLabel.backgroundColor=[UIColor colorWithWhite:0 alpha:.72];
+    self.diagRTSPState=@"STARTING";
+    self.diagRendererState=@"WAITING";
+    self.diagLastPacket=0;
+    self.diagTimer=[NSTimer scheduledTimerWithTimeInterval:1.0 target:self selector:@selector(refreshDiagnostics) userInfo:nil repeats:YES];
     [self.view addSubview:self.statusLabel];
     self.netQ=dispatch_queue_create("a510.rtsp", DISPATCH_QUEUE_SERIAL);
     dispatch_async(self.netQ, ^{ [self runRTSP]; });
@@ -37,10 +52,22 @@
 - (void)viewDidLayoutSubviews {
     [super viewDidLayoutSubviews];
     self.display.frame=self.view.bounds;
-    self.statusLabel.frame=CGRectMake(15,45,self.view.bounds.size.width-30,70);
+    self.statusLabel.frame=CGRectMake(12,40,self.view.bounds.size.width-24,170);
+}
+- (void)refreshDiagnostics {
+    NSTimeInterval age = self.diagLastPacket > 0 ? ([NSDate date].timeIntervalSince1970-self.diagLastPacket) : -1;
+    NSString *ageText = age >= 0 ? [NSString stringWithFormat:@"%.2fs",age] : @"never";
+    NSString *renderer = self.diagRendererState ?: @"?";
+    NSString *rtsp = self.diagRTSPState ?: @"?";
+    self.statusLabel.text=[NSString stringWithFormat:
+        @"A510Player Stage 3.2 DIAG\nRTSP: %@\nRTP packets: %lu\nH264 NAL: %lu\nLast RTP: %@\nRenderer: %@\nReconnects: %lu",
+        rtsp,(unsigned long)self.diagRTPPackets,(unsigned long)self.diagH264NALs,ageText,renderer,(unsigned long)self.diagReconnects];
 }
 - (void)updateStatus:(NSString*)s {
-    dispatch_async(dispatch_get_main_queue(), ^{ self.statusLabel.text=s; });
+    dispatch_async(dispatch_get_main_queue(), ^{
+        self.diagRTSPState=s ?: @"?";
+        [self refreshDiagnostics];
+    });
 }
 static BOOL sendAll(int fd, NSData *d){
     const uint8_t*p=d.bytes; size_t n=d.length;
@@ -79,11 +106,13 @@ static NSString *req(NSString*m,NSString*u,int c,NSString*x){
     if(CMVideoFormatDescriptionCreateFromH264ParameterSets(kCFAllocatorDefault,2,sets,sizes,4,&f)==noErr) self.format=f;
 }
 - (void)enqueueNAL:(NSData*)nal marker:(BOOL)marker {
+    self.diagH264NALs++;
+
     if(!nal.length)return;
     uint8_t type=((const uint8_t*)nal.bytes)[0]&0x1f;
     if(type==7){self.sps=nal;[self makeFormatIfPossible];return;}
     if(type==8){self.pps=nal;[self makeFormatIfPossible];return;}
-    [self makeFormatIfPossible]; if(!self.format)return;
+    [self makeFormatIfPossible]; if(!self.format){ self.diagRendererState=@"WAIT SPS/PPS"; return; }
     uint32_t L=CFSwapInt32HostToBig((uint32_t)nal.length);
     NSMutableData*d=[NSMutableData dataWithBytes:&L length:4]; [d appendData:nal];
     CMBlockBufferRef bb=NULL; CMSampleBufferRef sb=NULL;
@@ -94,13 +123,16 @@ static NSString *req(NSString*m,NSString*u,int c,NSString*x){
         CFArrayRef at=CMSampleBufferGetSampleAttachmentsArray(sb,true);
         if(at&&CFArrayGetCount(at)) CFDictionarySetValue((CFMutableDictionaryRef)CFArrayGetValueAtIndex(at,0),kCMSampleAttachmentKey_DisplayImmediately,kCFBooleanTrue);
         dispatch_async(dispatch_get_main_queue(), ^{
-            if(self.display.status==AVQueuedSampleBufferRenderingStatusFailed)[self.display flush];
+            if(self.display.status==AVQueuedSampleBufferRenderingStatusFailed){ self.diagRendererState=[NSString stringWithFormat:@"FAILED %@",self.display.error.localizedDescription ?: @""]; [self.display flush]; } else self.diagRendererState=@"ENQUEUE OK";
             [self.display enqueueSampleBuffer:sb]; CFRelease(sb);
         });
     }
     if(bb)CFRelease(bb);
 }
 - (void)rtp:(NSData*)pkt {
+    self.diagRTPPackets++;
+    self.diagLastPacket=[NSDate date].timeIntervalSince1970;
+
     if(pkt.length<13)return; const uint8_t*r=pkt.bytes; NSUInteger cc=r[0]&15, off=12+cc*4;
     if(r[0]&0x10){if(pkt.length<off+4)return;off+=4+((((NSUInteger)r[off+2]<<8)|r[off+3])*4);}
     if(off>=pkt.length)return; const uint8_t*p=r+off; NSUInteger n=pkt.length-off; uint8_t type=p[0]&31;
@@ -111,10 +143,10 @@ static NSString *req(NSString*m,NSString*u,int c,NSString*x){
         if(end&&self.fu){NSData*x=[self.fu copy];self.fu=nil;[self enqueueNAL:x marker:(r[1]&0x80)!=0];}
     }
 }
-- (void)runRTSP {
-    [self updateStatus:@"A510Player Stage 3\nConnecting 192.168.0.1:554…"];
+- (void)runRTSPOnce {
+    [self updateStatus:@"TCP CONNECTING 192.168.0.1:554"];
     int fd=socket(AF_INET,SOCK_STREAM,0); struct sockaddr_in a={0};a.sin_family=AF_INET;a.sin_port=htons(554);inet_pton(AF_INET,"192.168.0.1",&a.sin_addr);
-    if(connect(fd,(struct sockaddr*)&a,sizeof(a))){[self updateStatus:@"A510 not reachable"];return;}
+    if(connect(fd,(struct sockaddr*)&a,sizeof(a))){[self updateStatus:@"TCP FAILED"];close(fd);return;} [self updateStatus:@"TCP OK / RTSP HANDSHAKE"];
     NSMutableData*c=[NSMutableData data]; int q=1; NSString*u=@"rtsp://192.168.0.1:554/livestream/12";
     sendAll(fd,[req(@"OPTIONS",u,q++,@"") dataUsingEncoding:NSUTF8StringEncoding]); [self readRTSP:fd carry:c];
     sendAll(fd,[req(@"DESCRIBE",u,q++,@"Accept: application/sdp\r\n") dataUsingEncoding:NSUTF8StringEncoding]);
@@ -125,7 +157,7 @@ static NSString *req(NSString*m,NSString*u,int c,NSString*x){
     if(!session){[self updateStatus:@"RTSP SETUP failed"];close(fd);return;}
     NSString*x=[NSString stringWithFormat:@"Session: %@\r\nRange: npt=0.000-\r\n",session];
     sendAll(fd,[req(@"PLAY",base,q++,x) dataUsingEncoding:NSUTF8StringEncoding]);
-    [self updateStatus:@"A510 LIVE\nWaiting for H.264…"];
+    [self updateStatus:@"PLAY SENT / RTP WAIT"];
     NSMutableData*stream=c;
     for(;;){
         while(stream.length>=4){
@@ -137,7 +169,18 @@ static NSString *req(NSString*m,NSString*u,int c,NSString*x){
         }
         uint8_t t[65536];ssize_t n=recv(fd,t,sizeof(t),0);if(n<=0)break;[stream appendBytes:t length:n];
     }
-    [self updateStatus:@"A510 stream stopped"]; close(fd);
+    [self updateStatus:@"STREAM EOF"]; close(fd);
+}
+
+- (void)runRTSP {
+    for(;;) {
+        @autoreleasepool {
+            self.diagReconnects++;
+            [self runRTSPOnce];
+        }
+        [self updateStatus:@"DISCONNECTED - retry 2s"];
+        [NSThread sleepForTimeInterval:2.0];
+    }
 }
 - (void)dealloc { if(_format)CFRelease(_format); }
 @end
