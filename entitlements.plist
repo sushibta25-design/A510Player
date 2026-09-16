@@ -3,4 +3,6 @@
 <plist version="1.0"><dict>
 <key>application-identifier</key><string>com.sushibta.a510player</string>
 <key>com.apple.developer.networking.multicast</key><true/>
+<!-- Jailbreak CarPlay scene experiment. The launcher may still require a private whitelist hook. -->
+<key>com.apple.developer.carplay-audio</key><true/>
 </dict></plist>
