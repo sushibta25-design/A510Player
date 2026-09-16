@@ -1,8 +1,8 @@
 Package: com.sushibta.a510player
 Name: A510Player
-Version: 0.2.0
+Version: 0.3.0
 Architecture: iphoneos-arm64
-Description: A510 RTSP connectivity test for rootless iOS.
+Description: Direct low-latency RTSP/H264 player test for 70mai A510.
 Maintainer: sushibta25-design
 Author: sushibta25-design
-Section: Utilities
+Section: Applications
