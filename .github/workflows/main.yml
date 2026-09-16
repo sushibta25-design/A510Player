@@ -19,6 +19,12 @@ jobs:
           mkdir -p $HOME/theos/sdks
           cp -R sdks-master/*.sdk $HOME/theos/sdks/
 
+      - name: Install ldid
+        run: |
+          brew install ldid
+          which ldid
+          ldid -h || true
+
       - name: Build rootless package
         run: |
           export THEOS=$HOME/theos
