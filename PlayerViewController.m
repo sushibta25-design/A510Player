@@ -30,7 +30,8 @@
     [super viewDidLoad];
     self.view.backgroundColor=UIColor.blackColor;
     self.display=[AVSampleBufferDisplayLayer layer];
-    self.display.videoGravity=AVLayerVideoGravityResizeAspect;
+    self.display.videoGravity=AVLayerVideoGravityResizeAspectFill;
+    self.display.backgroundColor=UIColor.blackColor.CGColor;
     [self.view.layer addSublayer:self.display];
     self.statusLabel=[[UILabel alloc] init];
     self.statusLabel.textColor=UIColor.whiteColor;
@@ -51,8 +52,34 @@
 }
 - (void)viewDidLayoutSubviews {
     [super viewDidLayoutSubviews];
-    self.display.frame=self.view.bounds;
-    self.statusLabel.frame=CGRectMake(12,40,self.view.bounds.size.width-24,170);
+    // CarBridge can resize/rotate the hosted iPhone view after it is already visible.
+    // Always bind the renderer to the current local view bounds and disable implicit
+    // CALayer animations so no stale portrait-sized strip remains on CarPlay.
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
+    self.display.frame = self.view.layer.bounds;
+    self.display.position = CGPointMake(CGRectGetMidX(self.view.layer.bounds), CGRectGetMidY(self.view.layer.bounds));
+    [CATransaction commit];
+
+    CGFloat w = CGRectGetWidth(self.view.bounds);
+    CGFloat h = CGRectGetHeight(self.view.bounds);
+    BOOL landscape = w > h;
+    self.statusLabel.frame = landscape ? CGRectMake(10, 10, MIN(360.0, w-20.0), 118.0)
+                                       : CGRectMake(12, 40, w-24, 170);
+    [self.view bringSubviewToFront:self.statusLabel];
+}
+
+- (void)viewWillTransitionToSize:(CGSize)size withTransitionCoordinator:(id<UIViewControllerTransitionCoordinator>)coordinator {
+    [super viewWillTransitionToSize:size withTransitionCoordinator:coordinator];
+    [coordinator animateAlongsideTransition:^(__unused id<UIViewControllerTransitionCoordinatorContext> context) {
+        [self.view setNeedsLayout];
+        [self.view layoutIfNeeded];
+    } completion:^(__unused id<UIViewControllerTransitionCoordinatorContext> context) {
+        [CATransaction begin];
+        [CATransaction setDisableActions:YES];
+        self.display.frame = self.view.layer.bounds;
+        [CATransaction commit];
+    }];
 }
 - (void)refreshDiagnostics {
     NSTimeInterval age = self.diagLastPacket > 0 ? ([NSDate date].timeIntervalSince1970-self.diagLastPacket) : -1;
