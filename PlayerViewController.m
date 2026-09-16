@@ -21,7 +21,7 @@
     [super viewDidLoad];
     self.view.backgroundColor=UIColor.blackColor;
     self.display=[AVSampleBufferDisplayLayer layer];
-    self.display.videoGravity=AVLayerVideoGravityResizeAspectFill;
+    self.display.videoGravity=AVLayerVideoGravityResizeAspect;
     self.display.backgroundColor=UIColor.blackColor.CGColor;
     self.display.actions=@{@"bounds":[NSNull null],@"position":[NSNull null],@"frame":[NSNull null]};
     [self.view.layer addSublayer:self.display];
