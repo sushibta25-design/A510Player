@@ -14,5 +14,5 @@ include $(THEOS_MAKE_PATH)/application.mk
 after-A510Player-stage::
 	@echo "==> Forcing Info.plist into A510Player.app"
 	@mkdir -p "$(THEOS_STAGING_DIR)/Applications/A510Player.app"
-	@cp -f "$(THEOS_PROJECT_DIR)/A510Player/Info.plist" "$(THEOS_STAGING_DIR)/Applications/A510Player.app/Info.plist"
+	@cp -f "$(THEOS_PROJECT_DIR)/Info.plist" "$(THEOS_STAGING_DIR)/Applications/A510Player.app/Info.plist"
 	@ls -lah "$(THEOS_STAGING_DIR)/Applications/A510Player.app"
