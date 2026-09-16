@@ -7,7 +7,7 @@
 #import <unistd.h>
 
 @interface PlayerViewController ()
-@property(nonatomic,strong) UILabel *status;
+@property(nonatomic,strong) UILabel *statusLabel;
 @property(nonatomic,strong) AVSampleBufferDisplayLayer *display;
 @property(nonatomic,strong) dispatch_queue_t netQ;
 @property(nonatomic,strong) NSMutableData *fu;
@@ -24,23 +24,23 @@
     self.display=[AVSampleBufferDisplayLayer layer];
     self.display.videoGravity=AVLayerVideoGravityResizeAspect;
     [self.view.layer addSublayer:self.display];
-    self.status=[[UILabel alloc] init];
-    self.status.textColor=UIColor.whiteColor;
-    self.status.backgroundColor=[UIColor colorWithWhite:0 alpha:.55];
-    self.status.numberOfLines=0;
-    self.status.textAlignment=NSTextAlignmentCenter;
-    self.status.text=@"A510Player Stage 3\nConnecting…";
-    [self.view addSubview:self.status];
+    self.statusLabel=[[UILabel alloc] init];
+    self.statusLabel.textColor=UIColor.whiteColor;
+    self.statusLabel.backgroundColor=[UIColor colorWithWhite:0 alpha:.55];
+    self.statusLabel.numberOfLines=0;
+    self.statusLabel.textAlignment=NSTextAlignmentCenter;
+    self.statusLabel.text=@"A510Player Stage 3\nConnecting…";
+    [self.view addSubview:self.statusLabel];
     self.netQ=dispatch_queue_create("a510.rtsp", DISPATCH_QUEUE_SERIAL);
     dispatch_async(self.netQ, ^{ [self runRTSP]; });
 }
 - (void)viewDidLayoutSubviews {
     [super viewDidLayoutSubviews];
     self.display.frame=self.view.bounds;
-    self.status.frame=CGRectMake(15,45,self.view.bounds.size.width-30,70);
+    self.statusLabel.frame=CGRectMake(15,45,self.view.bounds.size.width-30,70);
 }
-- (void)setStatus:(NSString*)s {
-    dispatch_async(dispatch_get_main_queue(), ^{ self.status.text=s; });
+- (void)updateStatus:(NSString*)s {
+    dispatch_async(dispatch_get_main_queue(), ^{ self.statusLabel.text=s; });
 }
 static BOOL sendAll(int fd, NSData *d){
     const uint8_t*p=d.bytes; size_t n=d.length;
@@ -112,9 +112,9 @@ static NSString *req(NSString*m,NSString*u,int c,NSString*x){
     }
 }
 - (void)runRTSP {
-    [self setStatus:@"A510Player Stage 3\nConnecting 192.168.0.1:554…"];
+    [self updateStatus:@"A510Player Stage 3\nConnecting 192.168.0.1:554…"];
     int fd=socket(AF_INET,SOCK_STREAM,0); struct sockaddr_in a={0};a.sin_family=AF_INET;a.sin_port=htons(554);inet_pton(AF_INET,"192.168.0.1",&a.sin_addr);
-    if(connect(fd,(struct sockaddr*)&a,sizeof(a))){[self setStatus:@"A510 not reachable"];return;}
+    if(connect(fd,(struct sockaddr*)&a,sizeof(a))){[self updateStatus:@"A510 not reachable"];return;}
     NSMutableData*c=[NSMutableData data]; int q=1; NSString*u=@"rtsp://192.168.0.1:554/livestream/12";
     sendAll(fd,[req(@"OPTIONS",u,q++,@"") dataUsingEncoding:NSUTF8StringEncoding]); [self readRTSP:fd carry:c];
     sendAll(fd,[req(@"DESCRIBE",u,q++,@"Accept: application/sdp\r\n") dataUsingEncoding:NSUTF8StringEncoding]);
@@ -122,10 +122,10 @@ static NSString *req(NSString*m,NSString*u,int c,NSString*x){
     NSString*track=[base stringByAppendingString:@"track1"];
     sendAll(fd,[req(@"SETUP",track,q++,@"Transport: RTP/AVP/TCP;unicast;interleaved=0-1\r\n") dataUsingEncoding:NSUTF8StringEncoding]);
     NSString*s=[self readRTSP:fd carry:c]; NSString*session=header(s,@"Session"); if([session containsString:@";"])session=[session componentsSeparatedByString:@";"].firstObject;
-    if(!session){[self setStatus:@"RTSP SETUP failed"];close(fd);return;}
+    if(!session){[self updateStatus:@"RTSP SETUP failed"];close(fd);return;}
     NSString*x=[NSString stringWithFormat:@"Session: %@\r\nRange: npt=0.000-\r\n",session];
     sendAll(fd,[req(@"PLAY",base,q++,x) dataUsingEncoding:NSUTF8StringEncoding]);
-    [self setStatus:@"A510 LIVE\nWaiting for H.264…"];
+    [self updateStatus:@"A510 LIVE\nWaiting for H.264…"];
     NSMutableData*stream=c;
     for(;;){
         while(stream.length>=4){
@@ -137,7 +137,7 @@ static NSString *req(NSString*m,NSString*u,int c,NSString*x){
         }
         uint8_t t[65536];ssize_t n=recv(fd,t,sizeof(t),0);if(n<=0)break;[stream appendBytes:t length:n];
     }
-    [self setStatus:@"A510 stream stopped"]; close(fd);
+    [self updateStatus:@"A510 stream stopped"]; close(fd);
 }
 - (void)dealloc { if(_format)CFRelease(_format); }
 @end
