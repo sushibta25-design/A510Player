@@ -1,4 +1,6 @@
 #import "PlayerViewController.h"
+#import "TrafficLightDetector.h"
+#import "TrafficLightOverlayView.h"
 #import <AVFoundation/AVFoundation.h>
 #import <CoreMedia/CoreMedia.h>
 #import <sys/socket.h>
@@ -16,9 +18,18 @@
 @property(nonatomic) BOOL stopping;
 @end
 
+@interface PlayerViewController ()
+@property(nonatomic,strong) TrafficLightDetector *trafficAI;
+@property(nonatomic,strong) TrafficLightOverlayView *trafficOverlay;
+@end
+
 @implementation PlayerViewController
 - (void)viewDidLoad {
     [super viewDidLoad];
+    self.trafficAI=[TrafficLightDetector new];
+    self.trafficOverlay=[[TrafficLightOverlayView alloc] initWithFrame:self.view.bounds];
+    [self.view addSubview:self.trafficOverlay];
+    NSLog(@"[TAsmartAI] overlay ready modelLoaded=%d", self.trafficAI.modelLoaded);
     self.view.backgroundColor=UIColor.blackColor;
     self.display=[AVSampleBufferDisplayLayer layer];
     self.display.videoGravity=AVLayerVideoGravityResizeAspect;
